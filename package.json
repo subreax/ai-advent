@@ -1,0 +1,22 @@
+{
+  "name": "ai-advent",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "subreax",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node --env-file=.env --import tsx index.ts"
+  },
+  "dependencies": {
+    "openai": "^6.22.0",
+    "undici": "^7.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

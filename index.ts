@@ -17,29 +17,59 @@ const client = new OpenAI({
 async function runSimplePrompt(model: ResponsesModel, prompt: string) {
   return client.responses.create({
     model,
-    input: prompt
+    input: prompt,
   });
 }
 
-async function runAdvancedPrompt(model: ResponsesModel, prompt: string) {
+async function runStepByStepPrompt(model: ResponsesModel, prompt: string) {
   return client.responses.create({
     model,
-    tools: [{ type: "web_search" }],
-    tool_choice: "auto",
+    input: [
+      {
+        role: 'developer',
+        content: 'Решай задачу пошагово.'
+      },
+      {
+        role: 'user',
+        content: prompt
+      }
+    ]
+  });
+}
 
+async function generateBetterPrompt(model: ResponsesModel, prompt: string) {
+  const response = await client.responses.create({
+    model,
     input: [
       {
         role: "developer",
         content:
-          "Подбери 4 лучших русскоязычных ресурса по теме. " +
-          "Ссылки должны быть реальными; если не уверен — не добавляй. " +
-          "Верни данные в виде списка такого формата: `- {title} - {url}`. ",
+          "Преобразуй пользовательский запрос в более совершенный промпт для LLM. " +
+          "Ответ должен содержать только новый промпт и ничего больше.",
       },
       { role: "user", content: prompt },
     ],
-
-    max_output_tokens: 200,
   });
+
+  return response.output_text.trim();
+}
+
+async function suggestExperts(model: ResponsesModel, prompt: string) {
+  const response = await client.responses.create({
+    model,
+    input: [
+      {
+        role: "developer",
+        content:
+          "Подбери около 3 экспертов из разных направлений под задачу пользователя. " +
+          "Ответ должен быть только в формате: роль1, роль2, роль3. " +
+          "Без пояснений, без нумерации, без дополнительных фраз.",
+      },
+      { role: "user", content: prompt },
+    ],
+  });
+
+  return response.output_text.trim();
 }
 
 async function main() {
@@ -48,6 +78,16 @@ async function main() {
   try {
     const model: ResponsesModel = "gpt-5.2";
 
+    const mode = await rl.question(
+      "Выберите режим (1 - обычный, 2 - пошаговый, 3 - с предварительной генерацией промпта, 4 - подбор экспертов): "
+    );
+    const normalizedMode = mode.trim();
+    if (!["1", "2", "3", "4"].includes(normalizedMode)) {
+      console.log("Некорректный режим. Завершение.");
+      rl.close();
+      return;
+    }
+
     const prompt = await rl.question("Введите ваш промпт: ");
     if (!prompt.trim()) {
       console.log("Промпт пустой. Завершение.");
@@ -55,16 +95,23 @@ async function main() {
       return;
     }
 
-    const mode = await rl.question(
-      "Выберите вариант промпта (1 - простой, 2 - с параметрами): "
-    );
+    let outputText = "";
+    if (normalizedMode === "1") {
+      const response = await runSimplePrompt(model, prompt);
+      outputText = response.output_text;
+    } else if (normalizedMode === "2") {
+      const response = await runStepByStepPrompt(model, prompt);
+      outputText = response.output_text;
+    } else if (normalizedMode === "3") {
+      const improvedPrompt = await generateBetterPrompt(model, prompt);
+      console.log(`Сгенерированный промпт:\n${improvedPrompt}\n\n`);
+      const response = await runSimplePrompt(model, improvedPrompt);
+      outputText = response.output_text;
+    } else {
+      outputText = await suggestExperts(model, prompt);
+    }
 
-    const response =
-      mode.trim() === "1"
-        ? await runSimplePrompt(model, prompt)
-        : await runAdvancedPrompt(model, prompt);
-
-    console.log(`Ответ от ${model}\n${response.output_text}`);
+    console.log(`\nОтвет от ${model}\n${outputText}`);
   } catch (error) {
     console.error("Ошибка:", error);
   } finally {

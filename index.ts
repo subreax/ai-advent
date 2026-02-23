@@ -14,62 +14,16 @@ const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-async function runSimplePrompt(model: ResponsesModel, prompt: string) {
+async function runPromptWithTemperature(
+  model: ResponsesModel,
+  prompt: string,
+  temperature: number
+) {
   return client.responses.create({
     model,
+    temperature,
     input: prompt,
   });
-}
-
-async function runStepByStepPrompt(model: ResponsesModel, prompt: string) {
-  return client.responses.create({
-    model,
-    input: [
-      {
-        role: 'developer',
-        content: 'Решай задачу пошагово.'
-      },
-      {
-        role: 'user',
-        content: prompt
-      }
-    ]
-  });
-}
-
-async function generateBetterPrompt(model: ResponsesModel, prompt: string) {
-  const response = await client.responses.create({
-    model,
-    input: [
-      {
-        role: "developer",
-        content:
-          "Преобразуй пользовательский запрос в более совершенный промпт для LLM. " +
-          "Ответ должен содержать только новый промпт и ничего больше.",
-      },
-      { role: "user", content: prompt },
-    ],
-  });
-
-  return response.output_text.trim();
-}
-
-async function suggestExperts(model: ResponsesModel, prompt: string) {
-  const response = await client.responses.create({
-    model,
-    input: [
-      {
-        role: "developer",
-        content:
-          "Подбери около 3 экспертов из разных направлений под задачу пользователя. " +
-          "Ответ должен быть только в формате: роль1, роль2, роль3. " +
-          "Без пояснений, без нумерации, без дополнительных фраз.",
-      },
-      { role: "user", content: prompt },
-    ],
-  });
-
-  return response.output_text.trim();
 }
 
 async function main() {
@@ -78,12 +32,12 @@ async function main() {
   try {
     const model: ResponsesModel = "gpt-5.2";
 
-    const mode = await rl.question(
-      "Выберите режим (1 - обычный, 2 - пошаговый, 3 - с предварительной генерацией промпта, 4 - подбор экспертов): "
+    const temperatureInput = await rl.question(
+      "Введите температуру (число от 0.0 до 2.0): "
     );
-    const normalizedMode = mode.trim();
-    if (!["1", "2", "3", "4"].includes(normalizedMode)) {
-      console.log("Некорректный режим. Завершение.");
+    const temperature = Number(temperatureInput.trim());
+    if (Number.isNaN(temperature) || temperature < 0 || temperature > 2) {
+      console.log("Некорректная температура. Завершение.");
       rl.close();
       return;
     }
@@ -95,23 +49,9 @@ async function main() {
       return;
     }
 
-    let outputText = "";
-    if (normalizedMode === "1") {
-      const response = await runSimplePrompt(model, prompt);
-      outputText = response.output_text;
-    } else if (normalizedMode === "2") {
-      const response = await runStepByStepPrompt(model, prompt);
-      outputText = response.output_text;
-    } else if (normalizedMode === "3") {
-      const improvedPrompt = await generateBetterPrompt(model, prompt);
-      console.log(`Сгенерированный промпт:\n${improvedPrompt}\n\n`);
-      const response = await runSimplePrompt(model, improvedPrompt);
-      outputText = response.output_text;
-    } else {
-      outputText = await suggestExperts(model, prompt);
-    }
+    const response = await runPromptWithTemperature(model, prompt, temperature);
 
-    console.log(`\nОтвет от ${model}\n${outputText}`);
+    console.log(`\nОтвет от ${model} (temperature=${temperature})\n${response.output_text}`);
   } catch (error) {
     console.error("Ошибка:", error);
   } finally {
